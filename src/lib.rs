@@ -27,19 +27,19 @@ async fn handler(trigger: &str, workspace: &str, channel: &str, sm: &slack_flows
     let github_owner = env::var("github_owner").unwrap_or("alabulei1".to_string());
     let github_repo = env::var("github_repo").unwrap_or("a-test".to_string());
 
+    let number = env::var("number").unwrap().parse::<u64>().unwrap_or(2481);
+    send_message_to_channel("ik8", "ch_in", sm.text.clone());
+
     if sm.text.to_lowercase().contains(trigger) {
         let octocrab = get_octo(&Provided(github_login));
-        let issues = octocrab.issues(&github_owner, &github_repo);
+        let issues_handle = octocrab.issues(&github_owner, &github_repo);
 
-        let issue = octocrab
-            .issues(&github_owner, &github_repo)
-            .get(2481)
-            .await
-            .unwrap();
-
+        let issue = issues_handle.get(number).await.unwrap();
+        let issue_creator_name = issue.user.login;
+        let issue_creator_role = issue.author_association;
         let issue_title = issue.title;
         let issue_number = issue.number;
-        let issue_body = issue.body.unwrap();
+        let issue_body = issue.body.unwrap_or("".to_string());
         let issue_url = issue.html_url;
         let labels = issue
             .labels
@@ -55,14 +55,21 @@ async fn handler(trigger: &str, workspace: &str, channel: &str, sm: &slack_flows
 
         let mut feed_tokens_map = Vec::new();
 
-        match issues.list_comments(2481).send().await {
+        let issue_creator_input = format!("issue creator {issue_creator_name} has role {issue_creator_role}, filed the issue, posting: {issue_body}");
+
+        let mut tokens = bpe.encode_ordinary(&issue_creator_input);
+        feed_tokens_map.append(&mut tokens);
+
+        match issues_handle.list_comments(number).send().await {
             Ok(pages) => {
                 for comment in pages.items {
                     let comment_body = comment.body.unwrap();
+                    let commenter = comment.user.login;
+
                     let head = comment_body.chars().take(50).collect::<String>();
                     send_message_to_channel("ik8", "ch_out", head);
-
-                    let mut tokens = bpe.encode_ordinary(&comment_body);
+                    let commenter_input = format!("{commenter} commented: {comment_body}");
+                    let mut tokens = bpe.encode_ordinary(&commenter_input);
                     feed_tokens_map.append(&mut tokens);
                 }
             }
@@ -95,20 +102,20 @@ async fn handler(trigger: &str, workspace: &str, channel: &str, sm: &slack_flows
 
                 let text_chunk = bpe.decode(token_chunk).unwrap();
 
-                let map_question = format!("The issue is titled {issue_title}, labeled {labels}, with one chunk of the body text or comment text {text_chunk}. Please summarize key information in this section.");
+                let map_question = format!("The issue is titled {issue_title}, with one chunk of the body text or comment text {text_chunk}. Please focus on the main points of the comment, any proposed solutions, and any consensus or disagreements among the commenters. Please summarize key information in this section.");
 
                 match openai.chat_completion(&chat_id, &map_question, &co).await {
                     Ok(r) => {
                         let head = r.choice.clone().chars().take(50).collect::<String>();
                         send_message_to_channel("ik8", "ch_out", head);
-    
+
                         map_out.push_str(r.choice.trim());
                     }
                     Err(_e) => {}
                 }
             }
 
-            let reduce_question = format!("The issue is titled {issue_title}, with summarized key info of its chunks {map_out}, please make a concise summary for this issue to facilitate the next action.");
+            let reduce_question = format!("{issue_creator_name} with role {issue_creator_role} filed the issue titled {issue_title}, labeled {labels}, here are the key info you extracted from issue body text and comments in chunks {map_out}, please focus on the main points of the comments, any proposed solutions, and any consensus or disagreements among the commenters. Please make a concise summary for this issue to facilitate the next action.");
 
             match openai
                 .chat_completion(&chat_id, &reduce_question, &co)
@@ -123,7 +130,7 @@ async fn handler(trigger: &str, workspace: &str, channel: &str, sm: &slack_flows
         } else {
             let issue_body = bpe.decode(feed_tokens_map).unwrap();
 
-            let question = format!("The issue is titled {issue_title}, labeled {labels}, with body text or comment text {issue_body}, based on this context, please make a concise summary for this issue to facilitate the next action.");
+            let question = format!("{issue_creator_name} with role {issue_creator_role} filed the issue titled {issue_title}, labeled {labels}, please focus on the main points of the comments, any proposed solutions, and any consensus or disagreements among the commenters. Please make a concise summary for this issue to facilitate the next action.");
 
             match openai.chat_completion(&chat_id, &question, &co).await {
                 Ok(r) => {
