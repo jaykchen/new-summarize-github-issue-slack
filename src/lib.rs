@@ -27,7 +27,7 @@ async fn handler(trigger: &str, workspace: &str, channel: &str, sm: &slack_flows
     let github_owner = env::var("github_owner").unwrap_or("alabulei1".to_string());
     let github_repo = env::var("github_repo").unwrap_or("a-test".to_string());
 
-    let number = env::var("number").unwrap().parse::<u64>().unwrap_or(2481);
+    let number = env::var("number").unwrap().parse::<u64>().unwrap_or(2445);
     send_message_to_channel("ik8", "ch_in", sm.text.clone());
 
     if sm.text.to_lowercase().contains(trigger) {
@@ -49,7 +49,7 @@ async fn handler(trigger: &str, workspace: &str, channel: &str, sm: &slack_flows
             .join(", ");
 
         let head = issue_body.chars().take(50).collect::<String>();
-        send_message_to_channel("ik8", "ch_out", head);
+        send_message_to_channel("ik8", "ch_in", head);
 
         let bpe = cl100k_base().unwrap();
 
@@ -67,7 +67,7 @@ async fn handler(trigger: &str, workspace: &str, channel: &str, sm: &slack_flows
                     let commenter = comment.user.login;
 
                     let head = comment_body.chars().take(50).collect::<String>();
-                    send_message_to_channel("ik8", "ch_out", head);
+                    send_message_to_channel("ik8", "ch_in", head);
                     let commenter_input = format!("{commenter} commented: {comment_body}");
                     let mut tokens = bpe.encode_ordinary(&commenter_input);
                     feed_tokens_map.append(&mut tokens);
@@ -79,7 +79,7 @@ async fn handler(trigger: &str, workspace: &str, channel: &str, sm: &slack_flows
 
         let mut openai = OpenAIFlows::new();
         openai.set_flows_account(FlowsAccount::Provided(openai_key_name));
-        openai.set_retry_times(2);
+        openai.set_retry_times(3);
         let system = &format!("You are the co-owner of a github repo, you monitor new issues by analyzing the title, body text, labels and its context");
 
         let co = ChatOptions {
@@ -106,8 +106,7 @@ async fn handler(trigger: &str, workspace: &str, channel: &str, sm: &slack_flows
 
                 match openai.chat_completion(&chat_id, &map_question, &co).await {
                     Ok(r) => {
-                        let head = r.choice.clone().chars().take(50).collect::<String>();
-                        send_message_to_channel("ik8", "ch_out", head);
+                        send_message_to_channel("ik8", "ch_out", r.choice.clone());
 
                         map_out.push_str(r.choice.trim());
                     }
