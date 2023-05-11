@@ -48,6 +48,9 @@ async fn handler(trigger: &str, workspace: &str, channel: &str, sm: &slack_flows
             .collect::<Vec<String>>()
             .join(", ");
 
+        let head = issue_body.chars().take(50).collect::<String>();
+        send_message_to_channel("ik8", "ch_out", head);
+
         let bpe = cl100k_base().unwrap();
 
         let mut feed_tokens_map = Vec::new();
@@ -56,6 +59,9 @@ async fn handler(trigger: &str, workspace: &str, channel: &str, sm: &slack_flows
             Ok(pages) => {
                 for comment in pages.items {
                     let comment_body = comment.body.unwrap();
+                    let head = comment_body.chars().take(50).collect::<String>();
+                    send_message_to_channel("ik8", "ch_out", head);
+
                     let mut tokens = bpe.encode_ordinary(&comment_body);
                     feed_tokens_map.append(&mut tokens);
                 }
@@ -93,6 +99,9 @@ async fn handler(trigger: &str, workspace: &str, channel: &str, sm: &slack_flows
 
                 match openai.chat_completion(&chat_id, &map_question, &co).await {
                     Ok(r) => {
+                        let head = r.choice.clone().chars().take(50).collect::<String>();
+                        send_message_to_channel("ik8", "ch_out", head);
+    
                         map_out.push_str(r.choice.trim());
                     }
                     Err(_e) => {}
