@@ -92,7 +92,7 @@ async fn handler(trigger: &str, workspace: &str, channel: &str, sm: &slack_flows
         let total_tokens_count = feed_tokens_map.len();
         let mut _summary = "";
 
-        if total_tokens_count > 3000 {
+        if total_tokens_count > 1800 {
             let mut token_vec = feed_tokens_map.split_whitespace().collect::<Vec<&str>>();
             let mut map_out = "".to_string();
 
