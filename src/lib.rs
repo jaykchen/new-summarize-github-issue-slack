@@ -136,6 +136,8 @@ async fn handler(trigger: &str, workspace: &str, channel: &str, sm: &slack_flows
             match openai.chat_completion(&chat_id, &question, &co).await {
                 Ok(r) => {
                     _summary = r.choice.trim();
+                    send_message_to_channel("ik8", "ch_out", r.choice.clone());
+
                     return;
                 }
                 Err(_e) => {}
