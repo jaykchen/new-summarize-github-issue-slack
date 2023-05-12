@@ -7,7 +7,6 @@ use http_req::{request::Method, request::Request, uri::Uri};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-
 #[no_mangle]
 pub fn run() {
     dotenv().ok();
@@ -51,9 +50,6 @@ async fn handler(trigger: &str, workspace: &str, channel: &str, sm: &slack_flows
             .collect::<Vec<String>>()
             .join(", ");
 
-        let head = issue_body.chars().take(50).collect::<String>();
-        send_message_to_channel("ik8", "ch_in", head);
-
         // let bpe = cl100k_base().unwrap();
 
         let mut feed_tokens_map = String::new();
@@ -80,16 +76,7 @@ async fn handler(trigger: &str, workspace: &str, channel: &str, sm: &slack_flows
             Err(_e) => {}
         }
 
-        // let mut openai = OpenAIFlows::new();
-        // openai.set_retry_times(2);
         let system = &format!("You are the co-owner of a github repo, you monitor new issues by analyzing the title, body text, labels and its context");
-
-        // let co = ChatOptions {
-        //     model: ChatModel::GPT35Turbo,
-        //     restart: true,
-        //     system_prompt: Some(system),
-        // };
-        // let chat_id = format!("ISSUE#{issue_number}");
 
         let total_tokens_count = feed_tokens_map.len();
         let mut _summary = "".to_string();
@@ -107,62 +94,30 @@ async fn handler(trigger: &str, workspace: &str, channel: &str, sm: &slack_flows
 
                 let map_question = format!("The issue is titled {issue_title}, with one chunk of the body text or comment text {text_chunk}. Please focus on the main points of the comment, any proposed solutions, and any consensus or disagreements among the commenters. Please summarize key information in this section.");
 
-             let r = custom_gpt(&system, &map_question, 128).await;
-              send_message_to_channel("ik8", "ch_out", r.clone());
+                let r = custom_gpt(&system, &map_question, 128).await;
+                send_message_to_channel("ik8", "ch_mid", r.clone());
 
                 map_out.push_str(&r);
-
-                // match openai.chat_completion(&chat_id, &map_question, &co).await {
-                //     Ok(r) => {
-                //         send_message_to_channel("ik8", "ch_out", r.choice.clone());
-
-                //         map_out.push_str(r.choice.trim());
-                //     }
-                //     Err(_e) => {}
-                // }
             }
 
             let reduce_question = format!("{issue_creator_name} with role {issue_creator_role} filed the issue titled {issue_title}, labeled {labels}, here are the key info you extracted from issue body text and comments in chunks {map_out}, please focus on the main points of the comments, any proposed solutions, and any consensus or disagreements among the commenters. Please make a concise summary for this issue to facilitate the next action.");
 
-            _summary = custom_gpt(&system, &reduce_question, 256).await.to_string();;
+            _summary = custom_gpt(&system, &reduce_question, 256).await.to_string();
             send_message_to_channel("ik8", "ch_out", _summary.clone());
-
-            // match openai
-            //     .chat_completion(&chat_id, &reduce_question, &co)
-            //     .await
-            // {
-            //     Ok(r) => {
-            //         _summary = r.choice.trim();
-            //         return;
-            //     }
-            //     Err(_e) => {}
-            // }
         } else {
             let issue_body = feed_tokens_map;
             // let issue_body = bpe.decode(feed_tokens_map).unwrap();
 
             let question = format!("{issue_body}, please focus on the main points of the comments, any proposed solutions, and any consensus or disagreements among the commenters. Please make a concise summary for this issue to facilitate the next action.");
 
-            _summary = custom_gpt(&system, &question, 256).await.to_string();;
+            _summary = custom_gpt(&system, &question, 256).await.to_string();
             send_message_to_channel("ik8", "ch_out", _summary.clone());
-
-
-            // match openai.chat_completion(&chat_id, &question, &co).await {
-            //     Ok(r) => {
-            //         _summary = r.choice.trim();
-            //         send_message_to_channel("ik8", "ch_out", r.choice.clone());
-
-            //         return;
-            //     }
-            //     Err(_e) => {}
-            // }
         }
 
         let text = format!("Issue Summary:\n{}\n{}", _summary, issue_url);
         send_message_to_channel(&workspace, &channel, text);
     }
 }
-
 
 pub async fn custom_gpt(sys_prompt: &str, u_prompt: &str, m_token: u16) -> String {
     let system_prompt = serde_json::json!(
@@ -179,7 +134,10 @@ pub async fn custom_gpt(sys_prompt: &str, u_prompt: &str, m_token: u16) -> Strin
     }
 }
 
-pub async fn chat(message_obj: Vec<Value>, m_token: u16) -> Result<(String, String), anyhow::Error> {
+pub async fn chat(
+    message_obj: Vec<Value>,
+    m_token: u16,
+) -> Result<(String, String), anyhow::Error> {
     dotenv().ok();
     let api_token = env::var("OPENAI_API_TOKEN")?;
 
