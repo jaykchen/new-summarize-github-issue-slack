@@ -36,7 +36,8 @@ async fn handler(trigger: &str, workspace: &str, channel: &str, sm: &slack_flows
 
         let issue = issues_handle.get(number).await.unwrap();
         let issue_creator_name = issue.user.login;
-        let issue_creator_role = issue.author_association;
+        let mut issue_creator_role = "".to_string();
+        issue_creator_role = issue.author_association;
         let issue_title = issue.title;
         let issue_number = issue.number;
         let issue_body = issue.body.unwrap_or("".to_string());
@@ -55,7 +56,7 @@ async fn handler(trigger: &str, workspace: &str, channel: &str, sm: &slack_flows
 
         let mut feed_tokens_map = Vec::new();
 
-        let issue_creator_input = format!("issue creator {issue_creator_name} has role {issue_creator_role}, filed the issue, posting: {issue_body}");
+        let issue_creator_input = format!("issue creator {issue_creator_name} has role {issue_creator_role}, filed the issue titled {issue_title}, with labels {labels}, posting: {issue_body}");
 
         let mut tokens = bpe.encode_ordinary(&issue_creator_input);
         feed_tokens_map.append(&mut tokens);
@@ -78,8 +79,7 @@ async fn handler(trigger: &str, workspace: &str, channel: &str, sm: &slack_flows
         }
 
         let mut openai = OpenAIFlows::new();
-        openai.set_flows_account(FlowsAccount::Provided(openai_key_name));
-        openai.set_retry_times(3);
+        openai.set_retry_times(2);
         let system = &format!("You are the co-owner of a github repo, you monitor new issues by analyzing the title, body text, labels and its context");
 
         let co = ChatOptions {
@@ -129,7 +129,7 @@ async fn handler(trigger: &str, workspace: &str, channel: &str, sm: &slack_flows
         } else {
             let issue_body = bpe.decode(feed_tokens_map).unwrap();
 
-            let question = format!("{issue_creator_name} with role {issue_creator_role} filed the issue titled {issue_title}, labeled {labels}, please focus on the main points of the comments, any proposed solutions, and any consensus or disagreements among the commenters. Please make a concise summary for this issue to facilitate the next action.");
+            let question = format!("{issue_body}, please focus on the main points of the comments, any proposed solutions, and any consensus or disagreements among the commenters. Please make a concise summary for this issue to facilitate the next action.");
 
             match openai.chat_completion(&chat_id, &question, &co).await {
                 Ok(r) => {
